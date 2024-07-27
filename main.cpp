@@ -10,21 +10,103 @@
 using namespace std;
 using filesystem::path;
 
-path operator""_p(const char* data, std::size_t sz) {
+path operator""_p(const char *data, std::size_t sz)
+{
     return path(data, data + sz);
 }
 
-// напишите эту функцию
-bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories);
+const regex INC_DIR_REG(R"/(\s*#\s*include\s*"([^"]*)"\s*)/");
+const regex INC_CUR_DIR_REG(R"/(\s*#\s*include\s*<([^>]*)>\s*)/");
 
-string GetFileContents(string file) {
+bool Preprocess(ifstream &in_file, ofstream &out_file, const path &in_file_name, const vector<path> &include_directories)
+{
+    smatch m;
+    string read_str;
+    size_t num_str = 0;
+    bool flag = false;
+    if (!in_file.is_open())
+    {
+        return false;
+    }
+    while (getline(in_file, read_str))
+    {
+        ++num_str;
+        if (regex_match(read_str, m, INC_DIR_REG))
+        {
+            path p = in_file_name.parent_path() / string(m[1]);
+            ifstream in_tmp1(p);
+            if (!Preprocess(in_tmp1, out_file, p, include_directories))
+            {
+                p = string(m[1]);
+                for (const auto &dir : include_directories)
+                {
+                    path d = dir / p;
+                    ifstream subdir(d);
+                    if (subdir.is_open())
+                    {
+                        flag = true;
+                        Preprocess(subdir, out_file, d, include_directories);
+                        break;
+                    }
+                }
+                if (!flag)
+                {
+                    cout << "unknown include file "s << string(m[1]) << " at file "s << in_file_name.string() << " at line "s << num_str << endl;
+                    return false;
+                }
+            }
+        }
+        else if (regex_match(read_str, m, INC_CUR_DIR_REG))
+        {
+            path p = string(m[1]);
+            for (const auto &dir : include_directories)
+            {
+                path d = dir / p;
+                ifstream subdir(d);
+                if (subdir.is_open())
+                {
+                    flag = true;
+                    Preprocess(subdir, out_file, d, include_directories);
+                    break;
+                }
+            }
+            if (!flag)
+            {
+                cout << "unknown include file "s << string(m[1]) << " at file "s << in_file_name.string() << " at line "s << num_str << endl;
+                return false;
+            }
+        }
+        if (!(regex_match(read_str, INC_DIR_REG) || regex_match(read_str, INC_CUR_DIR_REG)))
+        {
+            out_file << read_str << endl;
+        }
+    }
+    return true;
+}
+
+bool Preprocess(const path &in_file, const path &out_file, const vector<path> &include_directories)
+{
+    ifstream in(in_file);
+    if (!in.is_open())
+    {
+        return false;
+    }
+    ofstream out(out_file);
+    return Preprocess(in, out, in_file, include_directories);
+
+    return true;
+}
+
+string GetFileContents(string file)
+{
     ifstream stream(file);
 
     // конструируем string по двум итераторам
     return {(istreambuf_iterator<char>(stream)), istreambuf_iterator<char>()};
 }
 
-void Test() {
+void Test()
+{
     error_code err;
     filesystem::remove_all("sources"_p, err);
     filesystem::create_directories("sources"_p / "include2"_p / "lib"_p, err);
@@ -71,7 +153,7 @@ void Test() {
     }
 
     assert((!Preprocess("sources"_p / "a.cpp"_p, "sources"_p / "a.in"_p,
-                                  {"sources"_p / "include1"_p,"sources"_p / "include2"_p})));
+                        {"sources"_p / "include1"_p, "sources"_p / "include2"_p})));
 
     ostringstream test_out;
     test_out << "// this comment before include\n"
@@ -91,6 +173,7 @@ void Test() {
     assert(GetFileContents("sources/a.in"s) == test_out.str());
 }
 
-int main() {
+int main()
+{
     Test();
 }
