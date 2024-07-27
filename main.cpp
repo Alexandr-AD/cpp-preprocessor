@@ -20,7 +20,7 @@ const regex INC_CUR_DIR_REG(R"/(\s*#\s*include\s*<([^>]*)>\s*)/");
 
 bool Preprocess(ifstream &in_file, ofstream &out_file, const path &in_file_name, const vector<path> &include_directories)
 {
-    smatch m;
+    smatch match;
     string read_str;
     size_t num_str = 0;
     bool flag = false;
@@ -31,16 +31,16 @@ bool Preprocess(ifstream &in_file, ofstream &out_file, const path &in_file_name,
     while (getline(in_file, read_str))
     {
         ++num_str;
-        if (regex_match(read_str, m, INC_DIR_REG))
+        if (regex_match(read_str, match, INC_DIR_REG))
         {
-            path p = in_file_name.parent_path() / string(m[1]);
-            ifstream in_tmp1(p);
-            if (!Preprocess(in_tmp1, out_file, p, include_directories))
+            path local_path = in_file_name.parent_path() / string(match[1]);
+            ifstream in_tmp1(local_path);
+            if (!Preprocess(in_tmp1, out_file, local_path, include_directories))
             {
-                p = string(m[1]);
+                local_path = string(match[1]);
                 for (const auto &dir : include_directories)
                 {
-                    path d = dir / p;
+                    path d = dir / local_path;
                     ifstream subdir(d);
                     if (subdir.is_open())
                     {
@@ -51,17 +51,17 @@ bool Preprocess(ifstream &in_file, ofstream &out_file, const path &in_file_name,
                 }
                 if (!flag)
                 {
-                    cout << "unknown include file "s << string(m[1]) << " at file "s << in_file_name.string() << " at line "s << num_str << endl;
+                    cout << "unknown include file "s << string(match[1]) << " at file "s << in_file_name.string() << " at line "s << num_str << endl;
                     return false;
                 }
             }
         }
-        else if (regex_match(read_str, m, INC_CUR_DIR_REG))
+        else if (regex_match(read_str, match, INC_CUR_DIR_REG))
         {
-            path p = string(m[1]);
+            path local_path = string(match[1]);
             for (const auto &dir : include_directories)
             {
-                path d = dir / p;
+                path d = dir / local_path;
                 ifstream subdir(d);
                 if (subdir.is_open())
                 {
@@ -72,7 +72,7 @@ bool Preprocess(ifstream &in_file, ofstream &out_file, const path &in_file_name,
             }
             if (!flag)
             {
-                cout << "unknown include file "s << string(m[1]) << " at file "s << in_file_name.string() << " at line "s << num_str << endl;
+                cout << "unknown include file "s << string(match[1]) << " at file "s << in_file_name.string() << " at line "s << num_str << endl;
                 return false;
             }
         }
